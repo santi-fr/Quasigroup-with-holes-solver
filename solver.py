@@ -40,6 +40,11 @@ def quasi_group_to_qubo(initial_problem, n):
                 constant=-1
             )
 
+     # Fixed values constraint: The given numbers in the initial problem must remain unchanged in the solution
+    fixed_values = [(i, j, initial_problem[i, j]) for i in range(n) for j in range(n) if initial_problem[i, j] != 0]
+    for i, j, k in fixed_values:
+        bqm.fix_variable(variables[f'x_{i}_{j}_{k}'], 1)
+
     return bqm, variables
 
 
@@ -93,3 +98,4 @@ solution = solve_quasi_group_bqm(bqm, variables, n)
 print("Solution:")
 print(solution)
 print("Solution is valid:", is_solution_valid(solution))
+
