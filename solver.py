@@ -1,101 +1,171 @@
-from dwave.system import LeapHybridSampler
-from dimod import BinaryQuadraticModel
-import numpy as np
+import os
+import argparse
+import copy
 import dimod
+from dimod.generators.constraints import combinations
+from hybrid.reference import KerberosSampler
 
-def quasi_group_to_qubo(initial_problem, n):
-    bqm = dimod.BinaryQuadraticModel.empty(dimod.BINARY)
+def get_label(row, col, digit, order):
+    '''
+    Get label for a cell in the matrix
+    Args:   row: Row index
+            col: Column index
+            digit: Digit
+            order: Order of the matrix
+    Returns:  Label for the cell
+    '''
 
-    # Create a dictionary to store variables
-    variables = {}
+    return "{row},{col}_{digit}".format(**locals())
 
-    rows = range(n)
-    columns = range(n)
-    numbers = range(1, n + 1)
+def get_matrix(filename):
+    '''
+    Read Quasigroup problem as matrix
+    Args:  filename: Quasigroup problem file
+    Returns:  Quasigroup problem as matrix
+    '''
 
-    # Iterate through each cell in the quasi-group grid
-    for i in rows:
-        for j in columns:
-            for k in numbers:
-                # Create a variable for each possible number k in cell (i, j)
-                var_name = f'x_{i}_{j}_{k}'
-                variables[var_name] = (i, j, k)
-                bqm.add_variable(var_name, 0)
+    with open(filename, "r") as f:
+        content = f.readlines()
 
-    # Row constraint: Every number between 1 and n (inclusive) must appear exactly once in each row
-    for i in rows:
-        for k in numbers:
-            bqm.add_linear_equality_constraint(
-                [(variables[f'x_{i}_{j}_{k}'], 1) for j in columns],
-                lagrange_multiplier=50,
-                constant = -1
-            )
+    lines = []
+    for line in content:
+        new_line = line.rstrip()
 
-    # Column constraint: Every number between 1 and n (inclusive) must appear exactly once in each column
-    for j in columns:
-        for k in numbers:
-            bqm.add_linear_equality_constraint(
-                [(variables[f'x_{i}_{j}_{k}'], 1) for i in rows],
-                lagrange_multiplier=50,
-                constant=-1
-            )
+        if new_line:
+            new_line = list(map(int, new_line.split(' ')))
+            lines.append(new_line)
 
-     # Fixed values constraint: The given numbers in the initial problem must remain unchanged in the solution
-    fixed_values = [(i, j, initial_problem[i, j]) for i in range(n) for j in range(n) if initial_problem[i, j] != 0]
-    for i, j, k in fixed_values:
-        bqm.fix_variable(variables[f'x_{i}_{j}_{k}'], 1)
+    return lines
 
-    return bqm, variables
+def is_correct(matrix):
+    '''
+    Verify if the solution is correct
+    Args:  matrix: Quasigroup problem as matrix
+    Returns:  True if the solution is correct, False otherwise
+    '''
 
+    order = len(matrix)
+    digits = set(range(1, order + 1))
 
-def solve_quasi_group_bqm(bqm, variables, n):
-
-    # Run on hybrid sampler
-    print("\nRunning hybrid solver...")
-    sampler = LeapHybridSampler()
-    sampleset = sampler.sample(bqm)
-
-    # Get the best sample (lowest energy)
-    best_sample = sampleset.first.sample
-
-    # Convert the sample to a human-readable solution
-    solution = np.zeros((n, n), dtype=int)
-
-    for var_name, value in best_sample.items():
-        if value == 1 and var_name in variables:
-            i, j, k = variables[var_name]
-            solution[i, j] = k
-
-    return solution
-
-
-def is_solution_valid(solution):
-    n = solution.shape[0]
-    for row in range(n):
-        if len(set(solution[row, :])) != n:
+    for row in matrix:
+        if set(row) != digits:
+            print("Error in row: ", row)
             return False
 
-    for col in range(n):
-        if len(set(solution[:, col])) != n:
+    for col_idx in range(order):
+        col = [matrix[row_idx][col_idx] for row_idx in range(order)]
+        if set(col) != digits:
+            print("Error in col: ", col)
             return False
 
     return True
 
-# Example Quasigroup with Holes problem
-qwh = np.array([
-    [1, 2, 0, 0],
-    [0, 0, 0, 1],
-    [0, 0, 1, 0],
-    [4, 1, 0, 0]
-])
-n = 4
-# Create the BQM for the quasi-group with holes
-bqm, variables = quasi_group_to_qubo(qwh, n)
+def build_bqm(matrix):
+    '''
+    Build BQM for Quasigroup problem
+    Args:  matrix: Quasigroup problem as matrix
+    Returns:  Binary quadratic model
+    '''
 
-# Solve the BQM
-solution = solve_quasi_group_bqm(bqm, variables, n)
+    order = len(matrix)
+    digits = range(1, order + 1)
 
-print("Solution:")
-print(solution)
-print("Solution is valid:", is_solution_valid(solution))
+    bqm = dimod.BinaryQuadraticModel({}, {}, 0.0, dimod.SPIN)
 
+    # Constraint: Each cell can only select one digit
+    for row in range(order):
+        for col in range(order):
+            node_digits = [get_label(row, col, digit, order) for digit in digits]
+            one_digit_bqm = combinations(node_digits, 1)
+            bqm.update(one_digit_bqm)
+
+    # Constraint: Each row of cells cannot have duplicate digits
+    for row in range(order):
+        for digit in digits:
+            row_nodes = [get_label(row, col, digit, order) for col in range(order)]
+            row_bqm = combinations(row_nodes, 1)
+            bqm.update(row_bqm)
+
+    # Constraint: Each column of cells cannot have duplicate digits
+    for col in range(order):
+        for digit in digits:
+            col_nodes = [get_label(row, col, digit, order) for row in range(order)]
+            col_bqm = combinations(col_nodes, 1)
+            bqm.update(col_bqm)
+
+    # Constraint: Fix known values
+    for row, line in enumerate(matrix):
+        for col, value in enumerate(line):
+            if value > 0:
+                bqm.fix_variable(get_label(row, col, value, order), 1)
+
+    return bqm
+
+def solve_quasigroup(bqm, matrix):
+    '''
+    Solve Quasigroup problem using KerberosSampler
+    Args:  bqm: Binary quadratic model
+           matrix: Quasigroup problem as matrix
+    Returns:  Solution matrix
+    '''
+
+    # Solve BQM
+    solution = KerberosSampler().sample(bqm,
+                                        max_iter=10,
+                                        convergence=3,
+                                        qpu_params={'label': 'Example - Quasigroup'})
+    best_solution = solution.first.sample
+    solution_list = [k for k, v in best_solution.items() if v == 1]
+
+    result = copy.deepcopy(matrix)
+
+    # Update matrix with solution
+    for label in solution_list:
+        coord, digit = label.split('_')
+        row, col = map(int, coord.split(','))
+
+        if result[row][col] > 0:
+            continue
+
+        result[row][col] = int(digit)
+
+    return result
+
+def main(filename):
+    # Read Quasigroup problem as matrix
+    matrix = get_matrix(filename)
+
+    # Solve BQM and update matrix
+    bqm = build_bqm(matrix)
+    result = solve_quasigroup(bqm, matrix)
+
+    # Print solution
+    print("Solution for", filename)
+    for line in result:
+        print(*line, sep=" ")   # Print list without commas or brackets
+
+    # Verify
+    if is_correct(result):
+        print("The solution is correct\n")
+    else:
+        print("The solution is incorrect\n")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Quasigroup With Holes problem solver")
+    parser.add_argument("filename", nargs="?", default="example.txt", help="Quasigroup problem file")
+    parser.add_argument("--test", action="store_true", help="Run tests from the 'tests' folder")
+
+    args = parser.parse_args()
+
+    if args.test:
+        test_folder = "tests"
+        if not os.path.exists(test_folder):
+            print("Error: 'tests' folder not found.")
+        else:
+            for file in os.listdir(test_folder):
+                if file.endswith(".txt"):
+                    filepath = os.path.join(test_folder, file)
+                    main(filepath)
+    else:
+        main(args.filename)
