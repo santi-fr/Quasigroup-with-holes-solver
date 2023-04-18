@@ -2,6 +2,7 @@ import os
 import argparse
 import copy
 import dimod
+import time
 from dimod.generators.constraints import combinations
 from hybrid.reference import KerberosSampler
 
@@ -137,7 +138,13 @@ def main(filename):
 
     # Solve BQM and update matrix
     bqm = build_bqm(matrix)
+
+    start_time = time.time()  # Start time measurement
     result = solve_quasigroup(bqm, matrix)
+    end_time = time.time()  # End time measurement
+
+    elapsed_time = end_time - start_time
+    print("Quantum annealing took {:.2f} seconds to solve the problem.".format(elapsed_time))
 
     # Print solution
     print("Solution for", filename)
