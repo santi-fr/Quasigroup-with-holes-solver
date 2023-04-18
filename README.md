@@ -1,50 +1,37 @@
 # Quasigroup with Holes Solver using D-Wave Leap Hybrid Sampler
 
-This program solves Quasigroup with Holes (QWH) problems using the D-Wave Leap Hybrid Sampler. It takes an initial QWH problem as a NumPy array and returns a solution that satisfies the problem if one exists.
+This repository contains a Python script for solving Quasigroup With Holes problems using D-Wave's Quantum Annealing.
 
-## Prerequisites
+## Requirements
 
-- Python 3.7 or higher
-- D-Wave Ocean SDK
-- Access to a D-Wave quantum annealer
+- Python 3.6 or higher
+- dimod
+- dwave-system
+- dwave-hybrid
+- dwave-cloud-client
 
 ## Installation
 
-1. Install the D-Wave Ocean SDK by following the instructions in the [official documentation](https://docs.ocean.dwavesys.com/en/latest/overview/install.html).
-2. Set up your D-Wave API token by following the instructions in the [official documentation](https://docs.ocean.dwavesys.com/en/latest/overview/dwave_cloud.html).
+It is recommended to use a virtual environment to install the required libraries.
 
+```bash
+pip install virtualenv
+virtualenv quasigroup_env
+source quasigroup_env/bin/activate  # On Windows: quasigroup_env\Scripts\activate
+pip install dimod dwave-system dwave-hybrid dwave-cloud-client
+```
 ## Usage
 
-1. Provide the initial Quasigroup with Holes problem as a NumPy array:
+The quasigroup_solver.py script can be executed from the command line. To run the script with a specific problem file:
 
-```python
-qwh = np.array([
-    [1, 2, 0, 0],
-    [0, 0, 0, 1],
-    [0, 0, 1, 0],
-    [4, 1, 0, 0]
-])
-n = 4
 ```
-Run the Python script:
-
-  ```python quasigroup_solver.py```
-  
-This will solve the predefined QWH problem and output the solution.
-
-Modifying the QWH Problem
-
-To solve a different QWH problem, modify the qwh variable in the Python script. The qwh variable should be a NumPy array representing the initial QWH problem.
-
-For example:
-
-```python
-
-qwh = np.array([
-    [1, 2, 0, 0],
-    [0, 0, 0, 1],
-    [0, 0, 1, 0],
-    [4, 1, 0, 0]
-])
-n = 4
+python solver.py <path_to_problem_file>
 ```
+To run the script in test mode, where it will read all .txt files in the tests folder and check if the solutions are correct:
+
+```
+python solver.py --test
+```
+## Problem File Format
+
+The problem file should contain an NxN matrix where the numbers represent the known values in the Quasigroup With Holes problem and the zeros represent empty spaces. Each row should be on a separate line and the numbers should be separated by spaces. See the example files in the tests folder for the correct format.
