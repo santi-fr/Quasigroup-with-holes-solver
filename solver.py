@@ -3,8 +3,70 @@ import argparse
 import copy
 import dimod
 import time
+import random
+import matplotlib.pyplot as plt
+import numpy as np
 from dimod.generators.constraints import combinations
 from hybrid.reference import KerberosSampler
+
+def generate_quasigroup_problem(dimension, num_variables):
+    # Genera un cuadrado latino completo
+    latin_square = [[(i + j) % dimension + 1 for i in range(dimension)] for j in range(dimension)]
+    
+    # Revuelve el cuadrado latino
+    random.shuffle(latin_square)
+    for row in latin_square:
+        random.shuffle(row)
+
+    # Quita algunas celdas para crear el problema de quasigroup with holes
+    variables_to_remove = num_variables
+    while variables_to_remove > 0:
+        i, j = random.randint(0, dimension - 1), random.randint(0, dimension - 1)
+        if latin_square[i][j] != 0:
+            latin_square[i][j] = 0
+            variables_to_remove -= 1
+
+    return latin_square
+
+def run_performance_tests(start_dim, end_dim, start_vars, end_vars):
+    performance_data = np.zeros((end_dim - start_dim + 1, end_vars - start_vars + 1))
+
+    for dim in range(start_dim, end_dim + 1):
+        for num_vars in range(start_vars, end_vars + 1):
+            times = []
+            for _ in range(10):
+                matrix = generate_quasigroup_problem(dim, num_vars)
+                start_time = time.time()
+                bqm = build_bqm(matrix)
+                result = solve_quasigroup(bqm, matrix)
+                end_time = time.time()
+
+                execution_time = end_time - start_time
+                times.append(execution_time)
+
+            avg_time = np.mean(times)
+            performance_data[dim - start_dim, num_vars - start_vars] = avg_time
+            print(f"Dimension: {dim}, Variables: {num_vars}, Avg. Time: {avg_time}")
+
+    return performance_data
+
+def plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars):
+    fig, ax = plt.subplots()
+    cax = ax.imshow(performance_data, cmap="viridis", aspect="auto", origin="lower",
+                    extent=[start_vars - 0.5, end_vars + 0.5, start_dim - 0.5, end_dim + 0.5])
+
+    ax.set_xticks(range(start_vars, end_vars + 1))
+    ax.set_yticks(range(start_dim, end_dim + 1))
+    ax.set_xlabel("Number of Variables")
+    ax.set_ylabel("Dimension")
+    ax.set_title("Quantum Quasigroup Solver Performance")
+
+    cbar = fig.colorbar(cax)
+    cbar.set_label("Average Execution Time (s)")
+
+    plt.savefig("quantum_performance_heatmap.png")
+    plt.show()
+
 
 def get_label(row, col, digit, order):
     '''
@@ -102,6 +164,26 @@ def build_bqm(matrix):
 
     return bqm
 
+def run_test(filename):
+    matrix = get_matrix(filename)
+    bqm = build_bqm(matrix)
+    start_time = time.time()
+    result = solve_quasigroup(bqm, matrix)
+    end_time = time.time()
+
+    execution_time = end_time - start_time
+    print("Execution time:", execution_time)
+
+    if result:
+        for line in result:
+            print(*line, sep=" ")
+        if is_correct(result):
+            print("The solution is correct")
+        else:
+            print("The solution is incorrect")
+    else:
+        print("No solution found")
+
 def solve_quasigroup(bqm, matrix):
     '''
     Solve Quasigroup problem using KerberosSampler
@@ -132,47 +214,26 @@ def solve_quasigroup(bqm, matrix):
 
     return result
 
-def main(filename):
-    # Read Quasigroup problem as matrix
-    matrix = get_matrix(filename)
-
-    # Solve BQM and update matrix
-    bqm = build_bqm(matrix)
-
-    start_time = time.time()  # Start time measurement
-    result = solve_quasigroup(bqm, matrix)
-    end_time = time.time()  # End time measurement
-
-    elapsed_time = end_time - start_time
-    print("Quantum annealing took {:.2f} seconds to solve the problem.".format(elapsed_time))
-
-    # Print solution
-    print("Solution for", filename)
-    for line in result:
-        print(*line, sep=" ")   # Print list without commas or brackets
-
-    # Verify
-    if is_correct(result):
-        print("The solution is correct\n")
-    else:
-        print("The solution is incorrect\n")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Quasigroup With Holes problem solver")
-    parser.add_argument("filename", nargs="?", default="example.txt", help="Quasigroup problem file")
-    parser.add_argument("--test", action="store_true", help="Run tests from the 'tests' folder")
-
-    args = parser.parse_args()
-
+def main(args):
     if args.test:
         test_folder = "tests"
-        if not os.path.exists(test_folder):
-            print("Error: 'tests' folder not found.")
-        else:
-            for file in os.listdir(test_folder):
-                if file.endswith(".txt"):
-                    filepath = os.path.join(test_folder, file)
-                    main(filepath)
+        for file in os.listdir(test_folder):
+            if file.endswith(".txt"):
+                print(f"Testing {file}:")
+                run_test(os.path.join(test_folder, file))
+                print()
+    elif args.performance:
+        start_dim, end_dim, start_vars, end_vars = args.performance
+        performance_data = run_performance_tests(start_dim, end_dim, start_vars, end_vars)
+        plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars)
     else:
-        main(args.filename)
+        run_test(args.file)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Solve Quasigroup with Holes using a quantum annealing approach with D-Wave")
+    parser.add_argument("--file", type=str, default="example.txt", help="Path to the problem file")
+    parser.add_argument("--test", action="store_true", help="Run tests from the 'tests' folder")
+    parser.add_argument("--performance", nargs=4, metavar=("START_DIM", "END_DIM", "START_VARS", "END_VARS"), type=int, help="Run performance tests with specified dimensions and number of variables")
+
+    args = parser.parse_args()
+    main(args)
