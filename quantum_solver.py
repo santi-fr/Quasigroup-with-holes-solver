@@ -3,6 +3,7 @@ import argparse
 import copy
 import dimod
 import time
+import quantum_library
 import numpy as np
 from dimod.generators.constraints import combinations
 from hybrid.reference import KerberosSampler
