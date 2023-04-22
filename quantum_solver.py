@@ -3,20 +3,30 @@ import argparse
 import copy
 import dimod
 import time
-import quantum_library
+import quasi_library as ql
 import numpy as np
 from dimod.generators.constraints import combinations
 from hybrid.reference import KerberosSampler
 
 
-def run_performance_tests(start_dim, end_dim, start_vars, end_vars):
-    performance_data = np.zeros((end_dim - start_dim + 1, end_vars - start_vars + 1))
+def run_performance_tests(start_dim, end_dim, start_fill_ratio, end_fill_ratio, num_tests=10):
+    '''
+    Run performance tests for a range of dimensions and fill ratios
+    Args:  start_dim: Start dimension
+            end_dim: End dimension
+            start_fill_ratio: Start fill ratio
+            end_fill_ratio: End fill ratio
+            num_tests: Number of tests to run
+    Returns:  List of performance data
+    '''
+    performance_data = np.zeros((end_dim - start_dim + 1, int((end_fill_ratio - start_fill_ratio) / 0.1) + 1))
 
     for dim in range(start_dim, end_dim + 1):
-        for num_vars in range(start_vars, end_vars + 1):
+        for fill_ratio_index, fill_ratio in enumerate(np.arange(start_fill_ratio, end_fill_ratio + 0.1, 0.1)):
             times = []
-            for _ in range(10):
-                matrix = generate_quasigroup_problem(dim, num_vars)
+            for _ in range(num_tests):
+                num_vars = int(dim * dim * fill_ratio)
+                matrix = ql.generate_quasigroup_problem(dim, num_vars)
                 start_time = time.time()
                 bqm = build_bqm(matrix)
                 _ = solve_quasigroup(bqm, matrix)
@@ -26,10 +36,11 @@ def run_performance_tests(start_dim, end_dim, start_vars, end_vars):
                 times.append(execution_time)
 
             avg_time = np.mean(times)
-            performance_data[dim - start_dim, num_vars - start_vars] = avg_time
-            print(f"Dimension: {dim}, Variables: {num_vars}, Avg. Time: {avg_time}")
+            performance_data[dim - start_dim, fill_ratio_index] = avg_time
+            print(f"Dimension: {dim}, Fill Ratio: {fill_ratio}, Avg. Time: {avg_time}")
 
     return performance_data
+
 
 
 
@@ -87,9 +98,9 @@ def build_bqm(matrix):
     return bqm
 
 def run_test(filename):
-    matrix = get_matrix(filename)
-    bqm = build_bqm(matrix)
+    matrix = ql.get_matrix(filename)
     start_time = time.time()
+    bqm = build_bqm(matrix)
     result = solve_quasigroup(bqm, matrix)
     end_time = time.time()
 
@@ -99,7 +110,7 @@ def run_test(filename):
     if result:
         for line in result:
             print(*line, sep=" ")
-        if is_correct(result):
+        if ql.is_correct(result):
             print("The solution is correct")
         else:
             print("The solution is incorrect")
@@ -147,7 +158,7 @@ def main(args):
     elif args.performance:
         start_dim, end_dim, start_vars, end_vars = args.performance
         performance_data = run_performance_tests(start_dim, end_dim, start_vars, end_vars)
-        plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars, "quantum_performance.png")
+        ql.plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars, "quantum_performance.png")
     else:
         run_test(args.file)
 
@@ -155,7 +166,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Solve Quasigroup with Holes using a quantum annealing approach with D-Wave")
     parser.add_argument("--file", type=str, default="example.txt", help="Path to the problem file")
     parser.add_argument("--test", action="store_true", help="Run tests from the 'tests' folder")
-    parser.add_argument("--performance", nargs=4, metavar=("START_DIM", "END_DIM", "START_VARS", "END_VARS"), type=int, help="Run performance tests with specified dimensions and number of variables")
+    parser.add_argument("--performance", action="store_true", help="Measure performance for a range of dimensions and fill ratios")
+    parser.add_argument("--dims", nargs=2, type=int, metavar=("DIM_START", "DIM_END"), help="Range of dimensions to test")
+    parser.add_argument("--fill_ratios", nargs=2, type=float, metavar=("FILL_RATIO_START", "FILL_RATIO_END"), help="Range of fill ratios to test")
+
 
     args = parser.parse_args()
     main(args)

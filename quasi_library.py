@@ -1,5 +1,6 @@
 import random
 import matplotlib.pyplot as plt
+import numpy as np
 
 def generate_quasigroup_problem(dimension, fill_ratio):
     # Genera un cuadrado latino completo
@@ -22,21 +23,21 @@ def generate_quasigroup_problem(dimension, fill_ratio):
 
     return latin_square
 
-def plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars, output_file):
+
+def plot_performance(performance_data, start_dim, end_dim, start_fill_ratio, end_fill_ratio, filename):
     fig, ax = plt.subplots()
-    cax = ax.imshow(performance_data, cmap="viridis", aspect="auto", origin="lower",
-                    extent=[start_vars - 0.5, end_vars + 0.5, start_dim - 0.5, end_dim + 0.5])
+    
+    fill_ratios = np.linspace(start_fill_ratio, end_fill_ratio, len(performance_data[0]))
+    
+    for dim, dim_performance in enumerate(performance_data, start_dim):
+        ax.plot(fill_ratios, dim_performance, label=f"Dimension {dim}")
 
-    ax.set_xticks(range(start_vars, end_vars + 1))
-    ax.set_yticks(range(start_dim, end_dim + 1))
-    ax.set_xlabel("Number of Variables")
-    ax.set_ylabel("Dimension")
+    ax.set_xlabel("Fill Ratio")
+    ax.set_ylabel("Average Execution Time (s)")
     ax.set_title("Quantum Quasigroup Solver Performance")
+    ax.legend()
 
-    cbar = fig.colorbar(cax)
-    cbar.set_label("Average Execution Time (s)")
-
-    plt.savefig(output_file)
+    plt.savefig(filename)
     plt.show()
 
 
