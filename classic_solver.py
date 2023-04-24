@@ -132,6 +132,7 @@ def main():
         dim_start, dim_end = args.dims
         fill_ratio_start, fill_ratio_end = args.fill_ratios
         performance_data = run_performance_tests(quasigroup_solver, dim_start, dim_end, fill_ratio_start, fill_ratio_end)
+        print(performance_data)
         ql.plot_performance(performance_data, dim_start, dim_end, fill_ratio_start, fill_ratio_end, "classic_performance.png")
 
     elif args.file:

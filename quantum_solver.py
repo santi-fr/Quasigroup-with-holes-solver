@@ -8,7 +8,6 @@ import numpy as np
 from dimod.generators.constraints import combinations
 from hybrid.reference import KerberosSampler
 
-
 def run_performance_tests(start_dim, end_dim, start_fill_ratio, end_fill_ratio, num_tests=10):
     '''
     Run performance tests for a range of dimensions and fill ratios
@@ -19,7 +18,7 @@ def run_performance_tests(start_dim, end_dim, start_fill_ratio, end_fill_ratio, 
             num_tests: Number of tests to run
     Returns:  List of performance data
     '''
-    performance_data = np.zeros((end_dim - start_dim + 1, int((end_fill_ratio - start_fill_ratio) / 0.1) + 1))
+    performance_data = np.zeros((end_dim - start_dim + 1, int((end_fill_ratio - start_fill_ratio) / 0.1) + 2))
 
     for dim in range(start_dim, end_dim + 1):
         for fill_ratio_index, fill_ratio in enumerate(np.arange(start_fill_ratio, end_fill_ratio + 0.1, 0.1)):
@@ -40,9 +39,6 @@ def run_performance_tests(start_dim, end_dim, start_fill_ratio, end_fill_ratio, 
             print(f"Dimension: {dim}, Fill Ratio: {fill_ratio}, Avg. Time: {avg_time}")
 
     return performance_data
-
-
-
 
 def get_label(row, col, digit, order):
     '''
@@ -156,9 +152,10 @@ def main(args):
                 run_test(os.path.join(test_folder, file))
                 print()
     elif args.performance:
-        start_dim, end_dim, start_vars, end_vars = args.performance
-        performance_data = run_performance_tests(start_dim, end_dim, start_vars, end_vars)
-        ql.plot_performance(performance_data, start_dim, end_dim, start_vars, end_vars, "quantum_performance.png")
+        dim_start, dim_end = args.dims
+        fill_ratio_start, fill_ratio_end = args.fill_ratios
+        performance_data = run_performance_tests(dim_start, dim_end, fill_ratio_start, fill_ratio_end)
+        ql.plot_performance(performance_data, dim_start, dim_end, fill_ratio_start, fill_ratio_end, "quantum_performance.png")
     else:
         run_test(args.file)
 
@@ -169,7 +166,6 @@ if __name__ == "__main__":
     parser.add_argument("--performance", action="store_true", help="Measure performance for a range of dimensions and fill ratios")
     parser.add_argument("--dims", nargs=2, type=int, metavar=("DIM_START", "DIM_END"), help="Range of dimensions to test")
     parser.add_argument("--fill_ratios", nargs=2, type=float, metavar=("FILL_RATIO_START", "FILL_RATIO_END"), help="Range of fill ratios to test")
-
 
     args = parser.parse_args()
     main(args)
